@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+
+file_io_help ( )
+{
+	echo "file-io usage:"
+	echo "  help                This menu"
+        echo "  start               Start the file-io daemon"
+	echo "  status              Show the daemon status"
+        echo "  stop                Stop the file-io daemon"
+        exit
+}
+
+cmd_help ( )
+{
+	file_io_help
+}
+
+command=
+
+while test $# != 0 && test -z "$command"
+do
+	case "$1" in
+		help | status | start | stop )
+			command=$1
+			;;
+		* )
+			break
+			;;
+	esac
+done
+
+if test -z "$command"
+then
+	command=help
+fi
+
+"cmd_$command" "$@"

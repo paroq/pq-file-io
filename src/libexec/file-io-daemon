@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+
+pid=$$
+
+echo "file-io daemon ($pid) started"
+
+cleanup ( )
+{
+	echo "file-io daemon caught TERM signal"
+	echo "cleaning up..."
+	exit
+}
+
+trap 'cleanup' TERM
+
+while true
+do
+	echo "daemon running..."
+	sleep 5
+done

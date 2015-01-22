@@ -3,10 +3,12 @@
 file_io_help ( )
 {
 	echo "file-io usage:"
-	echo "  help                This menu"
-        echo "  start               Start the file-io daemon"
-	echo "  status              Show the daemon status"
-        echo "  stop                Stop the file-io daemon"
+		echo "  help                            This menu"
+	echo "  disable <instance>              Disable all configs for <instance>"
+	echo "  disable <instance> <config>     Disable <config> for <instance>"
+	echo "  enable <instance>               Enable all configs for <instance>"
+	echo "  enable <instance> <config>      Enable <config> for <instance>"
+	echo "  list                            Show all the file-io configurations for each instance"
         exit
 }
 
@@ -15,12 +17,52 @@ cmd_help ( )
 	file_io_help
 }
 
+cmd_list ( )
+{
+	local configs=$( find $PQ_CHASSIS_VAR_DIR/instances/ -type f -name "*.file-io" | grep "file-io\/[^/]*.file-io$" )
+	local conf=
+	local instance=
+	local name=
+	local file=
+	local instance_dir=
+	local dir=
+	local enabled=
+
+	if test -z "$PQ_CURRENT_INSTANCE"
+	then
+		printf "No current instance selected\n"
+		exit 1
+	fi
+
+	instance_dir=$( echo $PQ_CURRENT_INSTANCE | awk -F '/' '{ print "/instances/countries/" $1 "/entities/" $2 "/parts/" $3 "/instances/" $4 }' )
+	dir=$PQ_CHASSIS_VAR_DIR/$instance_dir/
+
+	printf "File-IO:\n\n"
+	printf "  %-30s %-30s %-20s\n" "instance" "config" "status"
+	for i in $configs
+	do
+		conf=$( echo $i | awk -F '/' '{ print $9 "/" $11 "/" $13 "/" $15 " " $17 }' )
+		instance=$( echo $conf | awk '{ print $1 }' )
+		name=$( echo $conf | awk '{ print $2 }' )		
+
+		file=$dir/conf/${instance//\//-}-$name
+		if test -f $file
+		then
+			enabled="enabled"
+		else
+			enabled=""
+		fi
+
+		printf "  %-30s %-30s %-20s\n" "$instance" "$name" "$enabled"
+	done
+}
+
 command=
 
 while test $# != 0 && test -z "$command"
 do
 	case "$1" in
-		help | status | start | stop )
+		help | list )
 			command=$1
 			;;
 		* )

@@ -17,6 +17,129 @@ cmd_help ( )
 	file_io_help
 }
 
+disable_config ( )
+{
+	local conf_name=$1
+	local file_io_config=$2
+
+	if ! test -f $file_io_config
+	then
+		printf "config [$conf_name] not enabled\n"
+		return
+	fi
+
+	rm -f $file_io_config
+	printf "config [$conf_name] disabled\n"
+}
+
+enable_config ( )
+{
+	local conf_name=$1
+	local instance_config=$2
+	local file_io_config=$3
+
+	if test -f $file_io_config
+	then
+		printf "config [$conf_name] already enabled\n"
+		return
+	fi
+
+	ln -s $instance_config $file_io_config
+	printf "config [$conf_name] enabled\n"
+}
+
+cmd_disable ( )
+{
+	local instance_name=$2
+	local config_name=$3
+	local instance_dir=
+	local current_instance=$PQ_CURRENT_INSTANCE
+
+	local location=
+	local entity=
+	local part=
+	local instance=
+
+	dir=$PQ_CHASSIS_VAR_DIR/$( echo $current_instance | awk -F '/' '{ print "/instances/countries/" $1 "/entities/" $2 "/parts/" $3 "/instances/" $4 }' )
+
+	if test -z "$instance_name"
+	then
+		printf "No instance specified\n"
+		exit 1
+	fi
+
+	location=$( echo $instance_name | awk -F'/' '{ print $1 }' )
+	entity=$( echo $instance_name | awk -F'/' '{ print $2 }' )
+	part=$( echo $instance_name | awk -F'/' '{ print $3 }' )
+	instance=$( echo $instance_name | awk -F'/' '{ print $4 }' )
+	
+	if test -z "$location" || test -z "$entity" || test -z "$part" || test -z "$instance"
+	then
+		printf "Instance name was not in the correct format location/entity/part/instance\n"
+		exit 1
+	fi
+
+	instance_dir=$PQ_CHASSIS_VAR_DIR/instances/countries/$location/entities/$entity/parts/$part/instances/$instance/
+
+	if test -z "$config_name"
+	then
+		local confs=$( find $instance_dir/file-io -type f -name "*.file-io" -printf "%f\n" )
+		for i in $confs
+		do
+			disable_config "$i" "$dir/conf/$location-$entity-$part-$instance-$i"
+		done
+		
+	else
+		disable_config "$config_name" "$dir/conf/$location-$entity-$part-$instance-$config_name"
+	fi
+}
+
+cmd_enable ( )
+{
+	local instance_name=$2
+	local config_name=$3
+	local instance_dir=
+	local current_instance=$PQ_CURRENT_INSTANCE
+
+	local location=
+	local entity=
+	local part=
+	local instance=
+
+	dir=$PQ_CHASSIS_VAR_DIR/$( echo $current_instance | awk -F '/' '{ print "/instances/countries/" $1 "/entities/" $2 "/parts/" $3 "/instances/" $4 }' )
+
+	if test -z "$instance_name"
+	then
+		printf "No instance specified\n"
+		exit 1
+	fi
+
+	location=$( echo $instance_name | awk -F'/' '{ print $1 }' )
+	entity=$( echo $instance_name | awk -F'/' '{ print $2 }' )
+	part=$( echo $instance_name | awk -F'/' '{ print $3 }' )
+	instance=$( echo $instance_name | awk -F'/' '{ print $4 }' )
+	
+	if test -z "$location" || test -z "$entity" || test -z "$part" || test -z "$instance"
+	then
+		printf "Instance name was not in the correct format location/entity/part/instance\n"
+		exit 1
+	fi
+
+	instance_dir=$PQ_CHASSIS_VAR_DIR/instances/countries/$location/entities/$entity/parts/$part/instances/$instance/
+
+	if test -z "$config_name"
+	then
+		local confs=$( find $instance_dir/file-io -type f -name "*.file-io" -printf "%f\n" )
+		for i in $confs
+		do
+			enable_config "$i" "$instance_dir/file-io/$i" "$dir/conf/$location-$entity-$part-$instance-$i"
+		done
+		
+	else
+		enable_config "$config_name" "$instance_dir/file-io/$config_name" "$dir/conf/$location-$entity-$part-$instance-$config_name"
+	fi
+}
+
 cmd_list ( )
 {
 	local configs=$( find $PQ_CHASSIS_VAR_DIR/instances/ -type f -name "*.file-io" | grep "file-io\/[^/]*.file-io$" )
@@ -27,12 +150,6 @@ cmd_list ( )
 	local instance_dir=
 	local dir=
 	local enabled=
-
-	if test -z "$PQ_CURRENT_INSTANCE"
-	then
-		printf "No current instance selected\n"
-		exit 1
-	fi
 
 	instance_dir=$( echo $PQ_CURRENT_INSTANCE | awk -F '/' '{ print "/instances/countries/" $1 "/entities/" $2 "/parts/" $3 "/instances/" $4 }' )
 	dir=$PQ_CHASSIS_VAR_DIR/$instance_dir/
@@ -59,10 +176,16 @@ cmd_list ( )
 
 command=
 
+if test -z "$PQ_CURRENT_INSTANCE"
+then
+	printf "No instance currently selected\n"
+	exit 1
+fi
+
 while test $# != 0 && test -z "$command"
 do
 	case "$1" in
-		help | list )
+		help | list | enable | disable )
 			command=$1
 			;;
 		* )

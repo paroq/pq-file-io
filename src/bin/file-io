@@ -17,10 +17,19 @@ cmd_help ( )
 	file_io_help
 }
 
+eprintf ( )
+{
+	printf "ERROR: %s\n" "$*" 1>&2
+}
+
 disable_config ( )
 {
-	local conf_name=$1
-	local file_io_config=$2
+	local instance_dir=$1
+	local conf_name=$2
+	local file_io_config=$3
+	local user=
+	local found=
+	local home_dir=
 
 	if ! test -f $file_io_config
 	then
@@ -28,8 +37,113 @@ disable_config ( )
 		return
 	fi
 
+	source $file_io_config
+	user=$FILE_IO_USERNAME
+
 	rm -f $file_io_config
 	printf "config [$conf_name] disabled\n"
+
+	printf "checking if user [$user] is still required...\n"
+	found=$( grep "^FILE_IO_USERNAME='$user'" $instance_dir/* 2>/dev/null )
+
+	if test -z "$found"
+	then
+		home_dir=$( getent passwd $user | cut -f6 -d: )		
+		printf "no other configs require user [$user], deleting user and home directory [$home_dir]\n"
+		sudo "userdel" $user
+		sudo rm -rf $home_dir
+	fi
+
+}
+
+verify_config ( )
+{
+	local file="$1"
+
+	echo "verifying config..."
+
+	if test -z "$FILE_IO_INCOMING_DIR"
+	then
+		eprintf "FILE_IO_INCOMING_DIR not set in config [$file]"
+		exit 1
+	fi
+
+	if test -z "$FILE_IO_OUTGOING_DIR"
+	then
+		eprintf "FILE_IO_OUTGOING_DIR not set in config [$file]"
+		exit 1
+	fi
+
+	if test -z "$FILE_IO_DIR_REVERSED"
+	then
+		eprintf "FILE_IO_DIR_REVERSED not set in config [$file]"
+		exit 1
+	fi
+
+	if test -z "$FILE_IO_REGEX"
+	then
+		eprintf "FILE_IO_REGEX not set in config [$file]"
+		exit 1
+	fi
+
+	if test -z "$FILE_IO_USERNAME"
+	then
+		eprintf "FILE_IO_USERNAME not set in config [$file]"
+		exit 1
+	fi
+
+	if test -z "$FILE_IO_PASSWORD"
+	then
+		eprintf "FILE_IO_PASSWORD not set in config [$file]"
+		exit 1
+	fi
+
+	if test -z "${FILE_IO_COMMAND+1}"
+	then
+		eprintf "FILE_IO_COMMAND not set in config [$file]"
+		exit 1
+	fi
+}
+
+check_user_exists ( )
+{
+	local user="$1"
+	local pass="$2"
+	local encrypt=$( perl -e 'print crypt( $ARGV[0], "password" )' $pass )
+	local found=$( getent passwd $user 2>/dev/null )
+	local home_dir=
+
+	echo "checking if user [$user] exists..."
+
+	if test -z "$found"
+	then
+		echo "user [$user] not found, creating..."
+		sudo "useradd" -m -s /usr/lib/sftp-server -p $encrypt -G fileio-filetransfer $user
+		home_dir=$( getent passwd $user | cut -f6 -d: )		
+
+		sudo mkdir -p $home_dir/file-io/
+		sudo chown root:root $home_dir
+		sudo chmod 755 $home_dir
+		sudo chmod go-w $home_dir
+		sudo chown -R $user:fileio-filetransfer $home_dir/file-io
+	fi
+}
+
+check_user_incoming_dir_exists ( )
+{
+	local user="$1"
+	local incoming_dir="$2"
+	local home_dir=
+
+	echo "checking incoming directory exists..."
+	home_dir=$( getent passwd $user | cut -f6 -d: )
+
+	if ! test -d $home_dir/file-io/$incoming_dir
+	then
+		echo "directory $home_dir/file-io/$incoming_dir not found, creating..."
+		sudo mkdir -p $home_dir/file-io/$incoming_dir/tmp
+		sudo chown -R $user:fileio-filetransfer $home_dir/file-io/$incoming_dir
+	fi
 }
 
 enable_config ( )
@@ -43,6 +157,17 @@ enable_config ( )
 		printf "config [$conf_name] already enabled\n"
 		return
 	fi
+
+	source $instance_config
+
+	verify_config "$instance_config"
+
+	local user=$FILE_IO_USERNAME
+	local pass=$FILE_IO_PASSWORD
+	local incoming_dir=$FILE_IO_INCOMING_DIR
+
+	check_user_exists "$user" "$pass"
+	check_user_incoming_dir_exists "$user" "$incoming_dir"
 
 	ln -s $instance_config $file_io_config
 	printf "config [$conf_name] enabled\n"
@@ -86,11 +211,11 @@ cmd_disable ( )
 		local confs=$( find $instance_dir/file-io -type f -name "*.file-io" -printf "%f\n" 2>/dev/null )
 		for i in $confs
 		do
-			disable_config "$i" "$dir/conf/$entity-$location-$part-$instance-$i"
+			disable_config "$dir/conf/" "$i" "$dir/conf/$entity-$location-$part-$instance-$i"
 		done
 		
 	else
-		disable_config "$config_name" "$dir/conf/$entity-$location-$part-$instance-$config_name"
+		disable_config "$dir/conf/" "$config_name" "$dir/conf/$entity-$location-$part-$instance-$config_name"
 	fi
 }
 

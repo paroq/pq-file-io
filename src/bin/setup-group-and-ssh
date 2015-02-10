@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+
+found=
+
+printf "Checking if group [fileio-filetransfer] exists..."
+found=$( getent group fileio-filetransfer )
+
+if test -z "$found"
+then
+	printf "no\nCreating group\n"
+	groupadd --system fileio-filetransfer
+else
+	printf "yes\n"
+fi
+
+printf "Checking if ssh configuration has been updated..."
+found=$( grep "Match group fileio-filetransfer" /etc/ssh/sshd_config )
+
+if test -z "$found"
+then
+	printf "no\nModifying ssh configuration\n"
+	echo "" >> /etc/ssh/sshd_config
+	echo "Match group fileio-filetransfer" >> /etc/ssh/sshd_config
+	echo "  ChrootDirectory %h" >> /etc/ssh/sshd_config
+	echo "  X11Forwarding no" >> /etc/ssh/sshd_config
+	echo "  AllowTcpForwarding no" >> /etc/ssh/sshd_config
+	echo "  ForceCommand internal-sftp" >> /etc/ssh/sshd_config
+	sed -i 's,Subsystem sftp /usr/lib/openssh/sftp-server,Subsystem sftp internal-sftp,' /etc/ssh/sshd_config
+else
+	printf "yes\n"
+fi

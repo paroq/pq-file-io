@@ -4,6 +4,14 @@ pid=$$
 
 echo "file-io daemon ($pid) started"
 
+declare -a INCOMING_DIR
+declare -a OUTGOING_DIR
+declare -a DIR_REVERSED
+declare -a FILE_REGEX
+declare -a USERNAME
+declare -a PASSWORD
+declare -a COMMAND
+
 cleanup ( )
 {
 	echo "file-io daemon caught TERM signal"
@@ -13,8 +21,195 @@ cleanup ( )
 
 trap 'cleanup' TERM
 
-while true
-do
-	echo "daemon running..."
-	sleep 5
-done
+load_configs ( )
+{
+	echo "looking for configs.."
+	local i=0
+	local configs=$( find ../conf/ -type l -name "*.file-io" )
+	for c in $configs
+	do
+		
+		unset FILE_IO_INCOMING_DIR
+		unset FILE_IO_OUTGOING_DIR
+		unset FILE_IO_DIR_REVERSED
+		unset FILE_IO_REGEX
+		unset FILE_IO_USERNAME
+		unset FILE_IO_PASSWORD
+		unset FILE_IO_COMMAND
+
+		echo "config: $c"
+		source $c
+
+		if test -z "$FILE_IO_INCOMING_DIR"
+		then
+			printf "ERROR: FILE_IO_INCOMING_DIR not specified in config $c\n"
+			exit 1
+		fi
+
+		if test -z "$FILE_IO_OUTGOING_DIR"
+		then
+			printf "ERROR: FILE_IO_OUTGOING_DIR not specified in config $c\n"
+			exit 1
+		fi
+
+		if test -z "$FILE_IO_DIR_REVERSED"
+		then
+			printf "ERROR: FILE_IO_DIR_REVERSED not specified in config $c\n"
+			exit 1
+		fi
+
+		if test -z "$FILE_IO_REGEX"
+		then
+			printf "ERROR: FILE_IO_REGEX not specified in config $c\n"
+			exit 1
+		fi
+
+		if test -z "$FILE_IO_USERNAME"
+		then
+			printf "ERROR: FILE_IO_USERNAME not specified in config $c\n"
+			exit 1
+		fi
+
+		if test -z "$FILE_IO_PASSWORD"
+		then
+			printf "ERROR: FILE_IO_PASSWORD not specified in config $c\n"
+			exit 1
+		fi
+
+		if test -z ${FILE_IO_COMMAND+1}
+		then
+			printf "ERROR: FILE_IO_COMMAND not specified in config $c\n"
+			exit 1
+		fi
+
+		INCOMING_DIR[$i]=$FILE_IO_INCOMING_DIR
+		OUTGOING_DIR[$i]=$FILE_IO_OUTGOING_DIR
+		DIR_REVERSED[$i]=$FILE_IO_DIR_REVERSED
+		FILE_REGEX[$i]=$FILE_IO_REGEX
+		USERNAME[$i]=$FILE_IO_USERNAME
+		PASSWORD[$i]=$FILE_IO_PASSWORD
+		COMMAND[$i]=$FILE_IO_COMMAND
+
+		i=$(( i + 1 ))
+	done
+}
+
+verify_system( )
+{
+	local found=$( cat /etc/shells | grep "^/usr/lib/sftp-server" )
+	if test -z "$found"
+	then
+		printf "Adding '/usr/lib/sftp-server' to /etc/shells\n"
+		echo "/usr/lib/sftp-server" >> /etc/shells
+	else
+		printf "Found '/usr/lib/sftp-server' in /etc/shells, not adding\n"
+	fi
+}
+
+create_user ( )
+{
+	local index=$1
+	local user=
+	local pass=
+	local home_dir=
+
+	if test -z "$index"
+	then
+		printf "ERROR: no index provided to create_user\n"
+		exit 1
+	fi
+
+
+	######## CHANGE THE USERS HOME DIRECTORY to /home/username to fix ssh permissions shit.
+
+	user=${USERNAME[$index]}
+	pass=$( perl -e 'print crypt( $ARGV[0], "password" )' ${PASSWORD[$index]} )
+	home_dir=$( cd ../users/ && pwd )/$user
+
+	echo "user: $user"
+	echo "pass: ${PASSWORD[$index]}"
+	echo "home: $home_dir"
+
+	mkdir -p $home_dir/${INCOMING_DIR[$index]}/tmp
+	chmod -R 774 $home_dir
+
+	useradd -d $home_dir -m -s /usr/lib/sftp-server -p $pass -G fileio-filetransfer $user
+
+	chown root:root $home_dir
+	chmod 755 $home_dir
+	chmod go-w $home_dir
+
+	chown -R $user:fileio-filetransfer $home_dir/${INCOMING_DIR[$index]}
+	chmod ug+rwX $home_dir/${INCOMING_DIR[$index]}
+}
+
+verify_user ( )
+{
+	local index=$1
+	local found=
+
+	if test -z "$index"
+	then
+		printf "ERROR: no index provided to verify_user\n"
+		exit 1
+	fi
+
+	sed -i 's,Subsystem sftp /usr/lib/openssh/sftp-server,Subsystem sftp internal-sftp,' /etc/ssh/sshd_config
+
+	found=$( grep "Match group fileio-filetransfer" /etc/ssh/sshd_config )
+	if test -z "$found"
+	then
+		echo "" >> /etc/ssh/sshd_config
+		echo "Match group fileio-filetransfer" >> /etc/ssh/sshd_config
+		echo "  ChrootDirectory %h" >> /etc/ssh/sshd_config
+		echo "  X11Forwarding no" >> /etc/ssh/sshd_config
+		echo "  AllowTcpForwarding no" >> /etc/ssh/sshd_config
+		echo "  ForceCommand internal-sftp" >> /etc/ssh/sshd_config
+	fi
+
+	found=
+	found=$( cat /etc/group | grep "^fileio-filetransfer:" )
+	if test -z "$found"
+	then
+		groupadd --system fileio-filetransfer
+	fi
+}
+
+verify_config ( )
+{
+	local len=${#USERNAME[@]}
+	local found=
+	local user=
+	local i=0
+
+	while test $i -lt $len
+	do
+		user=${USERNAME[$i]}
+		printf "Username: %s\n" $user
+
+		found=$( cat /etc/passwd | grep "^$user:" )
+		if test -z "$found"
+		then
+			printf "  found: false\n"
+			create_user $i
+		else
+			printf "  found: true\n"
+			verify_user $i
+		fi
+
+		i=$(( i + 1 ))
+	done
+}
+
+loop ( )
+{
+	while true 
+	do
+		echo "Inside loop"
+		sleep 5
+	done
+}
+
+load_configs
+verify_system
+verify_config

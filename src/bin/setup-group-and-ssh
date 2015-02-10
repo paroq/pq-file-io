@@ -26,6 +26,8 @@ then
 	echo "  AllowTcpForwarding no" >> /etc/ssh/sshd_config
 	echo "  ForceCommand internal-sftp" >> /etc/ssh/sshd_config
 	sed -i 's,Subsystem sftp /usr/lib/openssh/sftp-server,Subsystem sftp internal-sftp,' /etc/ssh/sshd_config
+
+	service ssh restart
 else
 	printf "yes\n"
 fi

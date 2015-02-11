@@ -27,5 +27,5 @@ echo "command=[$command]"
 echo "PATH=[$PATH]"
 echo "LD_LIBRARY_PATH=[$LD_LIBRARY_PATH]"
 
-sudo "$part_dir/libexec/file-io-daemon" "&"
+"$part_dir/libexec/file-io-daemon" "&"
 echo $! > pq-file-io.pid

@@ -60,8 +60,6 @@ verify_config ( )
 {
 	local file="$1"
 
-	echo "verifying config..."
-
 	if test -z "$FILE_IO_INCOMING_DIR"
 	then
 		eprintf "FILE_IO_INCOMING_DIR not set in config [$file]"
@@ -113,11 +111,9 @@ check_user_exists ( )
 	local found=$( getent passwd $user 2>/dev/null )
 	local home_dir=
 
-	echo "checking if user [$user] exists..."
-
 	if test -z "$found"
 	then
-		echo "user [$user] not found, creating..."
+		printf "user [$user] not found, creating...\n"
 		sudo "useradd" -m -s /usr/lib/sftp-server -p $encrypt -G fileio-filetransfer $user
 		home_dir=$( getent passwd $user | cut -f6 -d: )		
 
@@ -135,12 +131,11 @@ check_user_incoming_dir_exists ( )
 	local incoming_dir="$2"
 	local home_dir=
 
-	echo "checking incoming directory exists..."
 	home_dir=$( getent passwd $user | cut -f6 -d: )
 
 	if ! test -d $home_dir/file-io/$incoming_dir
 	then
-		echo "directory $home_dir/file-io/$incoming_dir not found, creating..."
+		printf "directory $home_dir/file-io/$incoming_dir not found, creating...\n"
 		sudo mkdir -p $home_dir/file-io/$incoming_dir/tmp
 		sudo chown -R $user:fileio-filetransfer $home_dir/file-io/$incoming_dir
 	fi

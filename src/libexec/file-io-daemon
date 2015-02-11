@@ -23,9 +23,8 @@ trap 'cleanup' TERM
 
 load_configs ( )
 {
-	echo "looking for configs.."
 	local i=0
-	local configs=$( find ../conf/ -type l -name "*.file-io" )
+	local configs=$( find ../conf/ -maxdepth 1 -type l -name "*.file-io" )
 	for c in $configs
 	do
 		
@@ -37,7 +36,6 @@ load_configs ( )
 		unset FILE_IO_PASSWORD
 		unset FILE_IO_COMMAND
 
-		echo "config: $c"
 		source $c
 
 		if test -z "$FILE_IO_INCOMING_DIR"
@@ -94,122 +92,75 @@ load_configs ( )
 	done
 }
 
-verify_system( )
+find_and_move_files ( )
 {
-	local found=$( cat /etc/shells | grep "^/usr/lib/sftp-server" )
-	if test -z "$found"
+	local incoming_dir="$1"
+	local outgoing_dir="$2"
+	local pattern="$3"
+	local command="$4"
+	local files=
+	local count=
+
+	printf "Searching [$incoming_dir] for files that match the regex [$pattern]\n"
+
+	files=
+	files=$( find $incoming_dir/ -maxdepth 1 -type f -regex "$pattern" )
+	if test -z "$files"
 	then
-		printf "Adding '/usr/lib/sftp-server' to /etc/shells\n"
-		echo "/usr/lib/sftp-server" >> /etc/shells
+		count=0
 	else
-		printf "Found '/usr/lib/sftp-server' in /etc/shells, not adding\n"
-	fi
-}
-
-create_user ( )
-{
-	local index=$1
-	local user=
-	local pass=
-	local home_dir=
-
-	if test -z "$index"
-	then
-		printf "ERROR: no index provided to create_user\n"
-		exit 1
+		count=$( echo $files | wc -w )
 	fi
 
-
-	######## CHANGE THE USERS HOME DIRECTORY to /home/username to fix ssh permissions shit.
-
-	user=${USERNAME[$index]}
-	pass=$( perl -e 'print crypt( $ARGV[0], "password" )' ${PASSWORD[$index]} )
-	home_dir=$( cd ../users/ && pwd )/$user
-
-	echo "user: $user"
-	echo "pass: ${PASSWORD[$index]}"
-	echo "home: $home_dir"
-
-	mkdir -p $home_dir/${INCOMING_DIR[$index]}/tmp
-	chmod -R 774 $home_dir
-
-	useradd -d $home_dir -m -s /usr/lib/sftp-server -p $pass -G fileio-filetransfer $user
-
-	chown root:root $home_dir
-	chmod 755 $home_dir
-	chmod go-w $home_dir
-
-	chown -R $user:fileio-filetransfer $home_dir/${INCOMING_DIR[$index]}
-	chmod ug+rwX $home_dir/${INCOMING_DIR[$index]}
-}
-
-verify_user ( )
-{
-	local index=$1
-	local found=
-
-	if test -z "$index"
-	then
-		printf "ERROR: no index provided to verify_user\n"
-		exit 1
-	fi
-
-	sed -i 's,Subsystem sftp /usr/lib/openssh/sftp-server,Subsystem sftp internal-sftp,' /etc/ssh/sshd_config
-
-	found=$( grep "Match group fileio-filetransfer" /etc/ssh/sshd_config )
-	if test -z "$found"
-	then
-		echo "" >> /etc/ssh/sshd_config
-		echo "Match group fileio-filetransfer" >> /etc/ssh/sshd_config
-		echo "  ChrootDirectory %h" >> /etc/ssh/sshd_config
-		echo "  X11Forwarding no" >> /etc/ssh/sshd_config
-		echo "  AllowTcpForwarding no" >> /etc/ssh/sshd_config
-		echo "  ForceCommand internal-sftp" >> /etc/ssh/sshd_config
-	fi
-
-	found=
-	found=$( cat /etc/group | grep "^fileio-filetransfer:" )
-	if test -z "$found"
-	then
-		groupadd --system fileio-filetransfer
-	fi
-}
-
-verify_config ( )
-{
-	local len=${#USERNAME[@]}
-	local found=
-	local user=
-	local i=0
-
-	while test $i -lt $len
+	printf "  Found [$count] files in [$incoming_dir]\n"
+	
+	for f in $files
 	do
-		user=${USERNAME[$i]}
-		printf "Username: %s\n" $user
-
-		found=$( cat /etc/passwd | grep "^$user:" )
-		if test -z "$found"
-		then
-			printf "  found: false\n"
-			create_user $i
-		else
-			printf "  found: true\n"
-			verify_user $i
-		fi
-
-		i=$(( i + 1 ))
+		printf "  Moving [$f] to [$outgoing_dir]\n"
+		mv $f $outgoing_dir/ 2>&1
 	done
 }
 
 loop ( )
 {
+	local home_dir=
+	local length=
+	local end=
+	local user=
+	local incoming_dir=
+	local outgoing_dir=
+	local direction=
+	local pattern=
+	local command=
+	local files=
+	local count=
+
 	while true 
 	do
-		echo "Inside loop"
+		length=${#USERNAME[@]}
+		end=$(( ${#USERNAME[@]} - 1 ))
+
+		for i in $(seq 0 $end)
+		do
+			user=${USERNAME[$i]}
+			home_dir=$( getent passwd $user | cut -f6 -d: )
+			incoming_dir=$home_dir/file-io/${INCOMING_DIR[$i]}/
+			outgoing_dir=${OUTGOING_DIR[$i]}
+			pattern=${FILE_REGEX[$i]}
+			command=${COMMAND[$i]}
+			direction=${DIR_REVERSED[$i]}
+
+			if test $direction -eq 0
+			then
+				find_and_move_files "$incoming_dir" "$outgoing_dir" "$pattern" "$command"
+			else
+				find_and_move_files "$outgoing_dir" "$incoming_dir" "$pattern" "$command"
+			fi
+		done
+
 		sleep 5
 	done
 }
 
 load_configs
-verify_system
-verify_config
+loop

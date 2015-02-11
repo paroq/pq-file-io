@@ -138,7 +138,7 @@ check_user_incoming_dir_exists ( )
 		printf "directory $home_dir/file-io/$incoming_dir not found, creating...\n"
 		sudo mkdir -p $home_dir/file-io/$incoming_dir/tmp
 		sudo chown -R $user:fileio-filetransfer $home_dir/file-io/$incoming_dir
-		sudo chmod 777 $home_dir/file-io/$incoming_dir
+		sudo chmod -R 777 $home_dir/file-io/$incoming_dir
 	fi
 }
 

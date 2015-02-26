@@ -27,5 +27,5 @@ echo "command=[$command]"
 echo "PATH=[$PATH]"
 echo "LD_LIBRARY_PATH=[$LD_LIBRARY_PATH]"
 
-"$part_dir/libexec/file-io-daemon" "&"
+"$part_dir/libexec/file-io-daemon" 2>&1 1>../log/file-io-daemon.log &
 echo $! > pq-file-io.pid

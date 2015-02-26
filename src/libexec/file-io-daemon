@@ -21,6 +21,13 @@ cleanup ( )
 
 trap 'cleanup' TERM
 
+log ( )
+{
+	date=$( date "+%Y-%m-%d-%HT00" )
+	file=../log/file-io-daemon-$date.log
+	printf "$1\n" >> $file
+}
+
 load_configs ( )
 {
 	local i=0
@@ -101,7 +108,7 @@ find_and_move_files ( )
 	local files=
 	local count=
 
-	printf "Searching [$incoming_dir] for files that match the regex [$pattern]\n"
+	log "Searching [$incoming_dir] for files that match the regex [$pattern]"
 
 	files=
 	files=$( find $incoming_dir/ -maxdepth 1 -type f -regex "$pattern" )
@@ -112,11 +119,11 @@ find_and_move_files ( )
 		count=$( echo $files | wc -w )
 	fi
 
-	printf "  Found [$count] files in [$incoming_dir]\n"
+	log "  Found [$count] files in [$incoming_dir]"
 	
 	for f in $files
 	do
-		printf "  Moving [$f] to [$outgoing_dir]\n"
+		log "  Moving [$f] to [$outgoing_dir]"
 		mv $f $outgoing_dir/ 2>&1
 	done
 }

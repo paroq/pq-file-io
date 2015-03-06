@@ -25,7 +25,7 @@ log ( )
 {
 	date=$( date "+%Y-%m-%d-%HT00" )
 	file=../log/file-io-daemon-$date.log
-	printf "$1\n" >> $file
+	printf "$( date "+%H:%M:%S" ) $1\n" >> $file
 }
 
 load_configs ( )
@@ -107,6 +107,10 @@ find_and_move_files ( )
 	local command="$4"
 	local files=
 	local count=
+	local output=
+
+	FILE_IO_INCOMING_DIR=$incoming_dir
+	FILE_IO_OUTGOING_DIR=$outgoing_dir
 
 	log "Searching [$incoming_dir] for files that match the regex [$pattern]"
 
@@ -123,7 +127,10 @@ find_and_move_files ( )
 	
 	for f in $files
 	do
+		FILE_IO_FILE=$f
 		log "  Moving [$f] to [$outgoing_dir]"
+		output=$( eval $command )
+		log "  Command output: $output"
 		mv $f $outgoing_dir/ 2>&1
 	done
 }

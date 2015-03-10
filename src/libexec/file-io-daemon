@@ -127,7 +127,7 @@ find_and_move_files ( )
 	
 	for f in $files
 	do
-		FILE_IO_FILE=$f
+		FILE_IO_FILE=$( basename $f )
 		log "  Moving [$f] to [$outgoing_dir]"
 		mv $f $outgoing_dir/ 2>&1
 		output=$( eval $command 2>&1 )

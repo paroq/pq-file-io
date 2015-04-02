@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
-if test -z "$CHASSIS_VAR_DIR"
+if test -z "$PQ_CHASSIS_VAR_DIR"
 then
-	printf "please specify the chassis var directory in the env variable CHASSIS_VAR_DIRECTORY"
+	printf "please specify the chassis var directory in the env variable PQ_CHASSIS_VAR_DIRECTORY"
 	exit 1
 fi
 
